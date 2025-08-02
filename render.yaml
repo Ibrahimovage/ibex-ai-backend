@@ -2,10 +2,8 @@ services:
   - type: web
     name: ibex-ai-backend
     env: python
-    plan: free
-    runtime: python-3.9
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.18
+        value: 3.10.11
