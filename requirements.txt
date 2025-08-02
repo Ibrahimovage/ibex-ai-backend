@@ -1,7 +1,5 @@
-Flask==2.3.3
-Flask-CORS==4.0.0
-gunicorn==21.2.0
-torch==2.0.1
-transformers==4.21.0
-tokenizers==0.12.1
-
+Flask
+Flask-CORS
+gunicorn
+torch
+transformers
