@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from transformers import BlenderbotTokenizer, BlenderbotForConditionalGeneration
 import torch
+import os
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -15,17 +17,22 @@ class IbexAI:
             self.model = self.model.cuda()
 
         self.prompts = {
-            "security": "You are a cybersecurity expert. Answer the following question based on best security practices: ",
-            "startup": "You are a tech startup advisor. Respond to the following inquiry with practical guidance: ",
-            "deepai": "You are an advanced AI researcher. Provide deep technical insights into: ",
-            "poetry": "You are a poetic storyteller AI. Compose a creative, thoughtful response to: ",
+            "security": "You are IBEX, a witty cybersecurity AI companion. Answer with expertise and humor: ",
+            "startup": "You are IBEX, a tech startup advisor AI. Respond with practical guidance: ",
+            "deepai": "You are IBEX, an advanced AI researcher. Provide technical insights: ",
+            "poetry": "You are IBEX, a creative AI storyteller. Compose thoughtfully: ",
+            "general": "You are IBEX, a friendly AI security companion. Respond helpfully: "
         }
 
     def generate_response(self, message: str, intent: str = None) -> str:
         if not message:
             return "Please enter a message."
 
-        prefix = self.prompts.get(intent, "")
+        # Default to general if no intent
+        if not intent:
+            intent = "general"
+
+        prefix = self.prompts.get(intent, self.prompts["general"])
         prompt = prefix + message
 
         inputs = self.tokenizer(prompt, return_tensors="pt", max_length=128, truncation=True)
@@ -45,6 +52,11 @@ class IbexAI:
                     no_repeat_ngram_size=2
                 )
             response = self.tokenizer.decode(reply_ids[0], skip_special_tokens=True)
+            
+            # Clean response - remove the prompt
+            if prompt in response:
+                response = response.replace(prompt, "").strip()
+                
         except Exception as gen_err:
             print(f"[!] Model generation failed: {gen_err}")
             response = self.get_fallback_response(intent, message)
@@ -53,27 +65,69 @@ class IbexAI:
 
     def get_fallback_response(self, intent, message):
         fallback_templates = {
-            "security": f"For cybersecurity, a good start is to regularly update software, use strong passwords, and enable 2FA. You asked: '{message}'",
-            "startup": f"Startups thrive on solving real problems. Research your audience deeply and iterate fast. You asked: '{message}'",
-            "deepai": f"AI development involves data quality, model architecture, and deployment at scale. You asked: '{message}'",
-            "poetry": f"A poem begins in emotion and ends in understanding. Yours might start like this:\n\n\"{message}, the spark of dawn within the code.\"",
+            "security": f"🛡️ I'm IBEX, your security AI! For '{message}' - always use strong passwords, enable 2FA, and stay vigilant!",
+            "startup": f"🚀 Startup advice: solve real problems and iterate fast. About '{message}' - research your audience deeply!",
+            "deepai": f"🤖 AI insight: focus on data quality and model architecture. Regarding '{message}' - deployment at scale matters!",
+            "poetry": f"✨ A poem for you:\n\n'{message}' - like dawn breaking through code,\nBringing light to digital roads.",
+            "general": f"Hey! I'm IBEX, your AI companion. About '{message}' - I'm here to help with anything you need!"
         }
-        return fallback_templates.get(intent, f"I'm having trouble answering that. You said: '{message}'")
+        return fallback_templates.get(intent, f"I'm IBEX! I'm having trouble with that, but you said: '{message}'")
 
 ibex_ai = IbexAI()
+
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        'service': 'IBEX AI Backend',
+        'status': 'active',
+        'version': '1.0.0',
+        'description': 'Smart AI security companion with BlenderBot',
+        'endpoints': ['/chat', '/api/ask', '/health']
+    })
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'model': 'blenderbot-400M-distill'
+    })
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    try:
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({'error': 'Message required'}), 400
+        
+        message = data['message']
+        context = data.get('context', 'general')
+        
+        response = ibex_ai.generate_response(message, context)
+        
+        return jsonify({
+            'response': response,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'success',
+            'model': 'blenderbot'
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'error': 'Processing failed',
+            'message': str(e),
+            'fallback_response': "I'm IBEX, your AI security companion! How can I help you today?"
+        }), 500
 
 @app.route("/api/ask", methods=["POST"])
 def ask():
     data = request.get_json()
     message = data.get("message", "")
-    intent = data.get("intent", None)
+    intent = data.get("intent", "general")
 
     response = ibex_ai.generate_response(message, intent)
     return jsonify({"response": response})
 
-@app.route("/", methods=["GET"])
-def home():
-    return "🧠 Ibex AI backend running!"
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
